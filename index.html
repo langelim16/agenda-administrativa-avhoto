@@ -2748,6 +2748,11 @@ var clgParseLanc; // idem: horasComissaoMes lê o log de auditoria do CLG
 var clgGetState,clgSetState,navGetState,navSetState,horasGetState,horasSetState,horasInit,renderHoras,importInit;
 var clgImportBind;   // liga o bloco CLG da aba Importar (definido no módulo CLG, chamado pelo importInit)
 var navGetComissoes; // tabela Comissões do CONDEF p/ o importador de CLG (dias de comissão por nº PMPE)
+/* O gráfico de CLG guarda as comissões em cache (clgComissoesCache) para projetar o consumo.
+   navLoadComissoes() REATRIBUI navComissoes a um array novo, então o cache pode ficar apontando
+   para o array antigo e não enxergar alterações feitas depois — como concluir uma comissão.
+   Quem mexer nas comissões chama isto para o próximo render buscar a lista viva. */
+var clgComissoesInvalidar;
 var pessoalInit,renderPessoal,pessoalGetState,pessoalSetState;
 var ppssInit,renderPpss,ppssGetState,ppssSetState;
 var ppssImportBind; // liga o bloco PPSS da aba Importar (definido no módulo PPSS, chamado pelo importInit)
@@ -6715,9 +6720,55 @@ setTimeout(hideSplash,12000);
     }).join(""):(editing?'':'<tr><td colspan="'+colspan+'" style="text-align:center;color:var(--text3);font-style:italic">Nenhuma comissão lançada ainda.</td></tr>'))+
       (editing?'<tr class="dt-addrow-tr"><td colspan="'+colspan+'"><button class="nv-addrow" id="nv_comissao_addrow">+ Adicionar comissão</button></td></tr>':'');
     if(editing)bindRowDragGeneric(tbody,function(){return navComissoes;},navRenderComissoes,function(){navComissaoDirty=true;});
+    // Botão "✓ Concluir" na coluna Status (fora da edição), no mesmo padrão do "✓ Receber" dos
+    // abastecimentos: dois cliques (armar/confirmar) e nada de abrir a edição da tabela.
+    // Por que importa além do rótulo: enquanto o status for "Em andamento", clgComissaoJanelas()
+    // estende a janela da comissão até HOJE, ignorando a data de fim — é a regra do "fim que
+    // escorregou". Uma comissão que terminou mas ficou com o status velho segue, por isso,
+    // puxando a curva do gráfico de CLG para baixo todo dia. Concluir corta a projeção na data real.
+    if(!editing)navComissoes.forEach(function(r){
+      if(String(r.status||"")!=="Em andamento")return;
+      var td=tbody.querySelector('.dt-cell[data-id="'+r.id+'"][data-key="status"]');
+      if(!td)return;
+      var b=document.createElement("button");
+      b.className="nv-editbtn";b.textContent="✓ Concluir";
+      b.style.cssText="font-size:11px;padding:3px 9px;margin-left:6px";
+      b.onclick=function(ev){
+        ev.stopPropagation();
+        if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="Concluir em "+(String(r.fim||"").trim()||navHojeBR())+"?";b.style.color="var(--c-red)";return;}
+        b.disabled=true;
+        navConcluirComissao(r);
+      };
+      td.appendChild(b);
+    });
     var legendEl=document.getElementById("nv_comissao_legend");
     if(legendEl)legendEl.innerHTML=NAV_COMISSAO_STATUS.map(function(k){return '<span><i style="background:'+NAV_COMISSAO_STATUS_COLOR[k]+'"></i>'+esc(k)+'</span>';}).join("");
     navUpdateComissaoToolbar();
+  }
+  function navHojeBR(){
+    var d=new Date();
+    return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+  }
+  /* Encerra a comissão a partir da tabela, sem passar pela edição.
+     Além do status, cobre o fim em branco: clgComissaoJanelas() também corre até hoje quando
+     não há data de fim (fim==null?t:...), então concluir sem data deixaria o gráfico consumindo
+     do mesmo jeito — nesse caso assume hoje como término.
+     Os dois campos entram em manualFields porque a importação de PMPE trata esse array como
+     hierarquicamente superior e nunca sobrescreve o que está nele (ver skill pmpe-import);
+     sem isso, a próxima leitura do PMPE poderia devolver o status antigo. */
+  async function navConcluirComissao(r){
+    var antes=String(r.status||"—");
+    r.status="Concluída";
+    if(!String(r.fim||"").trim())r.fim=navHojeBR();
+    if(!Array.isArray(r.manualFields))r.manualFields=[];
+    ["status","fim"].forEach(function(k){if(r.manualFields.indexOf(k)<0)r.manualFields.push(k);});
+    navSaveComissoes();
+    await pushKV("navPush",NAVIOS_COMISSAO_KEY,navComissoes);
+    auditPushOne("nv_comissao",r.id,"Comissão concluída: "+(r.comissao||"—")+" · fim "+(r.fim||"—")+" · status "+antes+" → Concluída");
+    touchLastEdit("nv_comissao");
+    if(typeof clgComissoesInvalidar==="function")clgComissoesInvalidar();
+    navRenderComissoes();
+    toast("✓ Comissão concluída — o gráfico de CLG para de projetar consumo a partir de "+(r.fim||"—"),"ok");
   }
   function navUpdateComissaoToolbar(){
     var editBtn=document.getElementById("nv_comissao_edit"),actions=document.getElementById("nv_comissao_edit_actions"),saveBtn=document.getElementById("nv_comissao_save");
@@ -7590,6 +7641,8 @@ document.getElementById("detailDrawerBg").onclick=function(e){if(e.target.id==="
      Meio atracado: a linha só se estende reta (tracejada) até hoje. Quando o lançamento real
      chega (fechamento do mês), os pontos reais substituem integralmente o trecho estimado. ── */
   var clgComissoesCache=null,clgComissoesPedido=false;
+  // Chamado pelo CONDEF quando uma comissão muda (ver clgComissoesInvalidar lá em cima).
+  clgComissoesInvalidar=function(){clgComissoesCache=null;clgComissoesPedido=false;};
   function clgDateT(s){
     s=String(s||"").trim();if(!s)return null;
     var m=/^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
