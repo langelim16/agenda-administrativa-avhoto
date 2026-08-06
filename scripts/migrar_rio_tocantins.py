@@ -26,9 +26,22 @@ import argparse
 import json
 import os
 import re
+import ssl
 import sys
 import unicodedata
+import urllib.error
 import urllib.request
+
+
+def contexto_ssl():
+    """O Python do python.org no macOS não enxerga o cofre de certificados do
+    sistema, e todo urlopen https morre com CERTIFICATE_VERIFY_FAILED. Quando o
+    certifi estiver instalado, usamos o cofre dele."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
 
 NAVIO = "AvHoFluRioTocantins"
 HORAS_KEY = "tocantins"          # sufixo das chaves aa_horas_<key>_*
@@ -254,17 +267,56 @@ def main():
     for k, nota in sorted(relatorio):
         print("  %-32s %s" % (k, nota))
 
-    if args.push:
-        url, chave = args.push
-        alvo = url.rstrip("/") + "/rest/v1/agenda_data"
-        corpo = json.dumps(destino, ensure_ascii=False).encode("utf-8")
-        req = urllib.request.Request(alvo, data=corpo, method="POST", headers={
-            "apikey": chave, "Authorization": "Bearer " + chave,
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
-        })
-        with urllib.request.urlopen(req) as resp:
-            print("\nPush: HTTP %s — %d chave(s) gravada(s) em %s" % (resp.status, len(destino), alvo))
+    if not args.push:
+        print("\n" + "=" * 70)
+        print("ENSAIO — nada foi gravado no Supabase, só o arquivo acima.")
+        print("Para gravar de verdade, repita o comando acrescentando:")
+        print("  --push https://SEU-PROJETO.supabase.co SUA_CHAVE_SERVICE_ROLE")
+        print("=" * 70)
+        return
+
+    url, chave = args.push
+    alvo = url.rstrip("/") + "/rest/v1/agenda_data"
+    corpo = json.dumps(destino, ensure_ascii=False).encode("utf-8")
+    cab = {"apikey": chave, "Authorization": "Bearer " + chave,
+           "Content-Type": "application/json"}
+    ctx = contexto_ssl()
+
+    req = urllib.request.Request(alvo, data=corpo, method="POST", headers=dict(
+        cab, **{"Prefer": "resolution=merge-duplicates,return=minimal"}))
+    try:
+        with urllib.request.urlopen(req, context=ctx) as resp:
+            print("\nPush: HTTP %s — %d chave(s) enviada(s)" % (resp.status, len(destino)))
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode("utf-8", "replace")[:400]
+        print("\n" + "=" * 70)
+        print("FALHA NO PUSH — HTTP %s. Nada foi gravado." % e.code)
+        if e.code in (401, 403):
+            print("Chave recusada. Use a service_role (Settings > API > Secret keys),")
+            print("não a publishable — só a service_role passa pela RLS.")
+        print("Resposta do servidor: %s" % detalhe)
+        print("=" * 70)
+        return 1
+    except urllib.error.URLError as e:
+        print("\nFALHA NO PUSH — não consegui falar com %s (%s)." % (url, e.reason))
+        return 1
+
+    # Confere no servidor o que de fato ficou gravado — não confiar no 201.
+    conf = urllib.request.Request(alvo + "?select=key", headers=dict(
+        cab, **{"Prefer": "count=exact", "Range": "0-0"}))
+    try:
+        with urllib.request.urlopen(conf, context=ctx) as resp:
+            total = (resp.headers.get("Content-Range") or "*/?").split("/")[-1]
+    except Exception as e:
+        print("Gravou, mas não consegui reconferir a contagem (%s)." % e)
+        return
+
+    print("\n" + "=" * 70)
+    if total == str(len(destino)):
+        print("OK — %s chave(s) confirmada(s) no banco. Carga concluída." % total)
+    else:
+        print("ATENÇÃO — enviei %d chave(s), mas o banco reporta %s." % (len(destino), total))
+    print("=" * 70)
 
 
 if __name__ == "__main__":
