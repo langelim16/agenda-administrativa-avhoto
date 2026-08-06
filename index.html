@@ -2702,7 +2702,7 @@ button,.tab,.nav-item,.menu-item{touch-action:manipulation}
 <div class="dt-table-wrap" style="max-height:440px;overflow-y:auto">
   <table class="dt-table" id="lic_atas_table">
     <thead><tr>
-      <th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>Vigência</th>
+      <th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>CNPJ</th><th>Vigência</th>
       <th>Dias</th><th>OMs</th><th>Itens</th><th>Valor</th><th>PNCP</th>
     </tr></thead>
     <tbody id="lic_atas_tbody"></tbody>
@@ -2714,7 +2714,7 @@ button,.tab,.nav-item,.menu-item{touch-action:manipulation}
 <div class="stats-grid" id="lic_cobertura"></div>
 <div class="dt-table-wrap" style="max-height:360px;overflow-y:auto">
   <table class="dt-table" id="lic_pend_table">
-    <thead><tr><th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>Vigência</th><th>Dias</th><th>PNCP</th></tr></thead>
+    <thead><tr><th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>CNPJ</th><th>Vigência</th><th>Dias</th><th>PNCP</th></tr></thead>
     <tbody id="lic_pend_tbody"></tbody>
   </table>
 </div>
@@ -12656,9 +12656,9 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     var qtd=d[5]===""?null:Number(d[5]), pu=d[6]===""?null:Number(d[6]);
     var r={ai:ai, item:d[1], desc:normCase(d[2]), catmat:d[3], un:normUn(d[4]), qtd:qtd, pu:pu,
            tot:(qtd!==null&&pu!==null)?qtd*pu:null,
-           pe:a[1], ata:a[2], obj:objOf(ai), emp:empOf(ai), dias:diasOf(ai), vig:a[4], url:a[8]};
+           pe:a[1], ata:a[2], obj:objOf(ai), emp:empOf(ai), cnpj:a[9]||"", dias:diasOf(ai), vig:a[4], url:a[8]};
     r.gap=(qtd===null||pu===null||!r.catmat||!r.desc);
-    r.hay=(r.desc+" "+r.catmat+" "+r.obj+" "+r.emp+" "+r.pe+" "+r.ata+" "+r.item+" "+r.un).toLowerCase();
+    r.hay=(r.desc+" "+r.catmat+" "+r.obj+" "+r.emp+" "+r.cnpj+" "+r.pe+" "+r.ata+" "+r.item+" "+r.un).toLowerCase();
     return r;
   });
   var PEND_N = DATA.a.filter(function(a){return a[6]!==0;}).length;
@@ -12784,7 +12784,7 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     document.getElementById("lic_atas_count").textContent=keys.length+" ata(s) · "+fmtBRL(somaV);
     var tb=document.getElementById("lic_atas_tbody");
     if(!keys.length){
-      tb.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhuma ata para os filtros aplicados.</td></tr>';
+      tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhuma ata para os filtros aplicados.</td></tr>';
       return;
     }
     tb.innerHTML=keys.map(function(i){
@@ -12792,7 +12792,8 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
       return '<tr class="clickable-row '+rowCls(dias)+(st.ataSel===i?" lic-sel":"")+'" data-ata="'+i+'">'+
         '<td title="'+esc(objOf(i))+'">'+esc(objOf(i))+'</td>'+
         '<td>'+esc(a[1])+'</td><td>'+esc(a[2])+'</td>'+
-        '<td title="'+esc(a[9])+'">'+esc(empOf(i)||"—")+'</td>'+
+        '<td>'+esc(empOf(i)||"—")+'</td>'+
+        '<td>'+esc(a[9]||"—")+'</td>'+
         '<td>'+fmtData(a[4])+'</td>'+
         '<td>'+(dias===null?"—":(dias<0?"vencida":dias+"d"))+'</td>'+
         '<td>'+(a[7]||"—")+'</td><td><b>'+g.n+'</b></td><td><b>'+fmtBRL(g.v)+'</b></td>'+
@@ -12855,9 +12856,9 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     document.getElementById("lic_pend_tbody").innerHTML = pend.length? pend.map(function(i){
       var a=DATA.a[i], dias=diasOf(i);
       return '<tr class="'+rowCls(dias)+'"><td>'+esc(objOf(i))+'</td><td>'+esc(a[1])+'</td><td>'+esc(a[2])+'</td>'+
-        '<td>'+esc(empOf(i)||"—")+'</td><td>'+fmtData(a[4])+'</td>'+
+        '<td>'+esc(empOf(i)||"—")+'</td><td>'+esc(a[9]||"—")+'</td><td>'+fmtData(a[4])+'</td>'+
         '<td>'+(dias===null?"—":(dias<0?"vencida":dias+"d"))+'</td><td>'+pncpLink(a[8])+'</td></tr>';
-    }).join("") : '<tr><td colspan="7" style="text-align:center;color:var(--text3);font-style:italic;padding:14px">Todas as atas foram lidas.</td></tr>';
+    }).join("") : '<tr><td colspan="8" style="text-align:center;color:var(--text3);font-style:italic;padding:14px">Todas as atas foram lidas.</td></tr>';
   }
 
   function fillSelects(){
@@ -12872,10 +12873,10 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
 
   function exportCsv(){
     var rs=sortRows(filtered(false));
-    var head=["Objeto","PE","Ata","Fornecedor","Vigencia","DiasRestantes","Item","Descricao","CATMAT","Unidade","Qtd","PrecoUnit","Total","PNCP"];
+    var head=["Objeto","PE","Ata","Fornecedor","CNPJFornecedor","Vigencia","DiasRestantes","Item","Descricao","CATMAT","Unidade","Qtd","PrecoUnit","Total","PNCP"];
     var lines=[head.join(";")];
     rs.forEach(function(r){
-      lines.push([r.obj,r.pe,r.ata,r.emp,r.vig,r.dias===null?"":r.dias,r.item,r.desc,r.catmat,r.un,
+      lines.push([r.obj,r.pe,r.ata,r.emp,r.cnpj,r.vig,r.dias===null?"":r.dias,r.item,r.desc,r.catmat,r.un,
         r.qtd===null?"":String(r.qtd).replace(".",","),
         r.pu===null?"":String(r.pu).replace(".",","),
         r.tot===null?"":r.tot.toFixed(2).replace(".",","),
