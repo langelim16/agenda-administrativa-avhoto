@@ -2659,6 +2659,26 @@ button,.tab,.nav-item,.menu-item{touch-action:manipulation}
 </header>
 <div class="stats-grid" id="lic_kpis"></div>
 
+<div class="dt-section-head" id="lic_atas_head"><div class="dt-title-wrap"><h3 class="dt-table-title">Atas de Registro de Preços</h3><span class="lic-count" id="lic_atas_count"></span></div></div>
+<div class="dt-note">Uma linha por Ata em que o navio consta como órgão participante com itens, mais as atas cujo PDF não pôde ser lido — a lacuna fica na mesma lista, não escondida noutra tabela. <b>Clique numa linha</b> para restringir a consulta de itens, abaixo, só àquela ata.</div>
+<div class="stats-grid" id="lic_cobertura"></div>
+<div class="flt-bar" id="lic_leitura_bar">
+  <span style="display:flex;gap:6px">
+    <button class="chip-btn active" data-leit="dem">Com demanda do navio</button>
+    <button class="chip-btn" data-leit="pend">Não lidas (digitalizadas)</button>
+    <button class="chip-btn" data-leit="all">Todas</button>
+  </span>
+</div>
+<div class="dt-table-wrap" style="max-height:440px;overflow-y:auto">
+  <table class="dt-table" id="lic_atas_table">
+    <thead><tr>
+      <th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>CNPJ</th><th>Vigência</th>
+      <th>Dias</th><th>OMs</th><th>Leitura</th><th>Itens</th><th>Valor</th><th>PNCP</th>
+    </tr></thead>
+    <tbody id="lic_atas_tbody"></tbody>
+  </table>
+</div>
+
 <div class="dt-section-head">
   <div class="dt-title-wrap"><h3 class="dt-table-title">Consulta de itens — demandas do navio em Ata</h3><span class="lic-count" id="lic_count"></span></div>
   <div class="nv-toolbar">
@@ -2694,7 +2714,7 @@ button,.tab,.nav-item,.menu-item{touch-action:manipulation}
     <thead><tr>
       <th data-s="desc">Descrição</th><th data-s="catmat">CATMAT</th><th data-s="item">Item</th>
       <th data-s="pe">PE / Ata</th><th data-s="obj">Objeto</th>
-      <th data-s="emp">Fornecedor</th><th data-s="un">Un</th><th data-s="qtd">Qtd</th>
+      <th data-s="emp">Fornecedor</th><th data-s="cnpj">CNPJ</th><th data-s="un">Un</th><th data-s="qtd">Qtd</th>
       <th data-s="pu">Preço unit.</th><th data-s="tot">Total</th>
       <th data-s="dias">Vigência</th><th>PNCP</th>
     </tr></thead>
@@ -2703,27 +2723,6 @@ button,.tab,.nav-item,.menu-item{touch-action:manipulation}
   </table>
 </div>
 
-<div class="dt-section-head"><div class="dt-title-wrap"><h3 class="dt-table-title">Atas com demanda do navio</h3><span class="lic-count" id="lic_atas_count"></span></div></div>
-<div class="dt-note">Uma linha por Ata de Registro de Preços em que o navio consta como órgão participante com itens. A busca e os filtros acima também se aplicam a esta tabela; clique numa linha para restringir a consulta de itens só àquela ata.</div>
-<div class="dt-table-wrap" style="max-height:440px;overflow-y:auto">
-  <table class="dt-table" id="lic_atas_table">
-    <thead><tr>
-      <th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>CNPJ</th><th>Vigência</th>
-      <th>Dias</th><th>OMs</th><th>Itens</th><th>Valor</th><th>PNCP</th>
-    </tr></thead>
-    <tbody id="lic_atas_tbody"></tbody>
-  </table>
-</div>
-
-<div class="dt-section-head" id="lic_cob_head"><div class="dt-title-wrap"><h3 class="dt-table-title">Cobertura da leitura das atas</h3></div></div>
-<div class="dt-note">Atas cujo PDF no PNCP é imagem digitalizada não têm texto extraível — a demanda do navio nelas não pôde ser lida e precisa de OCR ou consulta manual. Elas aparecem abaixo para que a lacuna fique explícita.</div>
-<div class="stats-grid" id="lic_cobertura"></div>
-<div class="dt-table-wrap" style="max-height:360px;overflow-y:auto">
-  <table class="dt-table" id="lic_pend_table">
-    <thead><tr><th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>CNPJ</th><th>Vigência</th><th>Dias</th><th>PNCP</th></tr></thead>
-    <tbody id="lic_pend_tbody"></tbody>
-  </table>
-</div>
 <div class="foot" id="lic_hdr_foot">· Finanças ·</div>
 </div>
 
@@ -12666,7 +12665,7 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
   }
   function pncpLink(u){ return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener" title="Abrir no PNCP">↗</a>':"—"; }
 
-  var st = {busca:"", obj:"", pe:"", vig:"all", gap:false, sort:"desc", dir:1, ataSel:null};
+  var st = {busca:"", obj:"", pe:"", vig:"all", gap:false, sort:"desc", dir:1, ataSel:null, leitura:"dem"};
 
   /* linhas materializadas uma vez; gap = lacuna de leitura do PDF (sem qtd, preço, CATMAT ou descrição) */
   var ROWS = DATA.d.map(function(d){
@@ -12708,9 +12707,9 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
   }
 
   function temFiltro(){
-    return !!(st.busca.trim()||st.obj||st.pe||st.vig!=="all"||st.gap||st.ataSel!==null);
+    return !!(st.busca.trim()||st.obj||st.pe||st.vig!=="all"||st.gap||st.ataSel!==null||st.leitura!=="dem");
   }
-  function resetFiltros(){ st.busca="";st.obj="";st.pe="";st.vig="all";st.gap=false;st.ataSel=null; }
+  function resetFiltros(){ st.busca="";st.obj="";st.pe="";st.vig="all";st.gap=false;st.ataSel=null;st.leitura="dem"; }
 
   /* ── KPIs clicáveis: cada cartão é um atalho de filtro/navegação ── */
   var KPI=(function(){
@@ -12756,7 +12755,8 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     else if(k==="venc90")st.vig=(st.vig==="90")?"all":"90";
     else if(k==="vencida")st.vig=(st.vig==="venc")?"all":"venc";
     else if(k==="gap")st.gap=!st.gap;
-    else if(k==="ocr"){document.getElementById("lic_cob_head").scrollIntoView({behavior:"smooth",block:"start"});return;}
+    else if(k==="ocr"){st.leitura=(st.leitura==="pend")?"dem":"pend";
+      document.getElementById("lic_atas_head").scrollIntoView({behavior:"smooth",block:"start"});}
     renderAll();
   }
 
@@ -12768,7 +12768,7 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     });
     var tb=document.getElementById("lic_itens_tbody");
     if(!rs.length){
-      tb.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhum item para os filtros aplicados.</td></tr>';
+      tb.innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhum item para os filtros aplicados.</td></tr>';
       document.getElementById("lic_itens_tfoot").innerHTML=""; return;
     }
     tb.innerHTML=rs.map(function(r){
@@ -12779,6 +12779,7 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
         '<td>'+esc(r.pe||"—")+'<br><span style="font-size:9.5px;color:var(--text3)">ata '+esc(r.ata||"—")+'</span></td>'+
         '<td title="'+esc(r.obj)+'">'+esc(r.obj.length>30?r.obj.slice(0,29)+"…":r.obj)+'</td>'+
         '<td title="'+esc(r.emp)+'">'+esc(r.emp.length>20?r.emp.slice(0,19)+"…":(r.emp||"—"))+'</td>'+
+        '<td style="white-space:nowrap">'+esc(r.cnpj||"—")+'</td>'+
         '<td>'+esc(r.un||"—")+'</td>'+
         '<td>'+fmtNum(r.qtd)+'</td>'+
         '<td>'+fmtBRL(r.pu)+'</td>'+
@@ -12791,33 +12792,53 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     });
     var soma=rs.reduce(function(s,r){return s+(r.tot||0);},0);
     document.getElementById("lic_itens_tfoot").innerHTML =
-      '<tr><td colspan="7" style="text-align:right;font-weight:700">'+rs.length+' item(ns) — subtotal</td>'+
+      '<tr><td colspan="8" style="text-align:right;font-weight:700">'+rs.length+' item(ns) — subtotal</td>'+
       '<td colspan="2"></td><td><b>'+fmtBRL(soma)+'</b></td><td colspan="2"></td></tr>';
   }
+
+  /* Uma tabela só de atas. As duas anteriores mostravam conjuntos DISJUNTOS
+     (lidas com demanda × não lidas) com 8 de 11 colunas iguais, o que lia como
+     repetição. Fundidas, a lacuna de leitura fica na mesma lista — visível, que
+     era o ponto de tê-la — e a coluna Leitura diz de qual conjunto é a linha. */
+  var LEIT={0:["✓ lida","var(--c-teal)"],1:["⚠ digitalizada","var(--c-amber)"],2:["✕ falha","var(--c-red)"]};
 
   function renderAtas(ra){
     var agg={};
     ra.forEach(function(r){var g=agg[r.ai]||(agg[r.ai]={n:0,v:0});g.n++;g.v+=r.tot||0;});
-    var keys=Object.keys(agg).map(Number).sort(function(x,y){
+    var comDem=Object.keys(agg).map(Number);
+    var pend=[];
+    DATA.a.forEach(function(a,i){ if(a[6]!==0) pend.push(i); });
+
+    var keys = st.leitura==="pend" ? pend
+             : st.leitura==="all"  ? comDem.concat(pend)
+             : comDem;
+    keys.sort(function(x,y){
       return (objOf(x)+DATA.a[x][1]).localeCompare(objOf(y)+DATA.a[y][1],"pt-BR");
     });
-    var somaV=keys.reduce(function(s,i){return s+agg[i].v;},0);
-    document.getElementById("lic_atas_count").textContent=keys.length+" ata(s) · "+fmtBRL(somaV);
+    var somaV=keys.reduce(function(s,i){return s+((agg[i]&&agg[i].v)||0);},0);
+    var nDem=keys.filter(function(i){return agg[i];}).length;
+    document.getElementById("lic_atas_count").textContent =
+      keys.length+" ata(s)"+(nDem?" · "+nDem+" com demanda · "+fmtBRL(somaV):"");
+
     var tb=document.getElementById("lic_atas_tbody");
     if(!keys.length){
-      tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhuma ata para os filtros aplicados.</td></tr>';
+      tb.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhuma ata para os filtros aplicados.</td></tr>';
       return;
     }
     tb.innerHTML=keys.map(function(i){
-      var a=DATA.a[i], g=agg[i], dias=diasOf(i);
-      return '<tr class="clickable-row '+rowCls(dias)+(st.ataSel===i?" lic-sel":"")+'" data-ata="'+i+'">'+
+      var a=DATA.a[i], g=agg[i], dias=diasOf(i), L=LEIT[a[6]]||LEIT[0];
+      /* só a ata lida filtra a consulta de itens — a não lida não tem item para mostrar */
+      var cli=g?"clickable-row ":"";
+      return '<tr class="'+cli+rowCls(dias)+(st.ataSel===i?" lic-sel":"")+'"'+(g?' data-ata="'+i+'"':'')+'>'+
         '<td title="'+esc(objOf(i))+'">'+esc(objOf(i))+'</td>'+
         '<td>'+esc(a[1])+'</td><td>'+esc(a[2])+'</td>'+
         '<td>'+esc(empOf(i)||"—")+'</td>'+
-        '<td>'+esc(a[9]||"—")+'</td>'+
+        '<td style="white-space:nowrap">'+esc(a[9]||"—")+'</td>'+
         '<td>'+fmtData(a[4])+'</td>'+
         '<td>'+(dias===null?"—":(dias<0?"vencida":dias+"d"))+'</td>'+
-        '<td>'+(a[7]||"—")+'</td><td><b>'+g.n+'</b></td><td><b>'+fmtBRL(g.v)+'</b></td>'+
+        '<td>'+(a[7]||"—")+'</td>'+
+        '<td style="color:'+L[1]+';white-space:nowrap">'+esc(L[0])+'</td>'+
+        '<td><b>'+(g?g.n:"—")+'</b></td><td><b>'+(g?fmtBRL(g.v):"—")+'</b></td>'+
         '<td>'+pncpLink(a[8])+'</td></tr>';
     }).join("");
     tb.querySelectorAll("tr[data-ata]").forEach(function(tr){
@@ -12857,29 +12878,32 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
 
   function renderAll(){
     var rs=filtered(false);
-    renderKpis(); renderItens(rs); renderAtas(filtered(true)); renderCount(rs); syncControls();
+    renderKpis(); renderCobertura(); renderAtas(filtered(true)); renderItens(rs); renderCount(rs); syncControls();
   }
 
-  function renderPend(){
-    var pend=[], erro=0, ok=0;
-    DATA.a.forEach(function(a,i){
-      if(a[6]===1)pend.push(i); else if(a[6]===2){erro++;pend.push(i);} else ok++;
-    });
-    pend.sort(function(x,y){return (objOf(x)+DATA.a[x][1]).localeCompare(objOf(y)+DATA.a[y][1],"pt-BR");});
+  /* cobertura da leitura: fica junto da tabela de atas, que é o que ela mede.
+     Os cartões são atalhos para o filtro de leitura da própria tabela. */
+  function renderCobertura(){
+    var ok=0, dig=0, erro=0;
+    DATA.a.forEach(function(a){ if(a[6]===1)dig++; else if(a[6]===2)erro++; else ok++; });
     document.getElementById("lic_cobertura").innerHTML =
-      [["Atas lidas",ok,"PDF com camada de texto","var(--c-teal)"],
-       ["Digitalizadas",pend.length-erro,"imagem — exigem OCR","var(--c-amber)"],
-       ["Falha de leitura",erro,"PDF inválido no PNCP","var(--c-red)"]].map(function(c){
-        return '<div class="stats-card"><h4>'+esc(c[0])+'</h4>'+
-          '<div class="lic-kpi-n" style="color:'+c[3]+'">'+c[1]+'</div>'+
-          '<div class="lic-kpi-sub">'+esc(c[2])+'</div></div>';
+      [["dem","Atas lidas",ok,"PDF com camada de texto","var(--c-teal)"],
+       ["pend","Digitalizadas",dig,"imagem — exigem OCR","var(--c-amber)"],
+       ["pend","Falha de leitura",erro,"PDF inválido no PNCP","var(--c-red)"]].map(function(c){
+        var on=(st.leitura===c[0]);
+        return '<div class="stats-card lic-kpi'+(on?" active":"")+'" data-leit="'+c[0]+'" role="button" tabindex="0">'+
+          '<h4>'+esc(c[1])+'</h4>'+
+          '<div class="lic-kpi-n" style="color:'+c[4]+'">'+c[2]+'</div>'+
+          '<div class="lic-kpi-sub">'+esc(c[3])+'</div></div>';
       }).join("");
-    document.getElementById("lic_pend_tbody").innerHTML = pend.length? pend.map(function(i){
-      var a=DATA.a[i], dias=diasOf(i);
-      return '<tr class="'+rowCls(dias)+'"><td>'+esc(objOf(i))+'</td><td>'+esc(a[1])+'</td><td>'+esc(a[2])+'</td>'+
-        '<td>'+esc(empOf(i)||"—")+'</td><td>'+esc(a[9]||"—")+'</td><td>'+fmtData(a[4])+'</td>'+
-        '<td>'+(dias===null?"—":(dias<0?"vencida":dias+"d"))+'</td><td>'+pncpLink(a[8])+'</td></tr>';
-    }).join("") : '<tr><td colspan="8" style="text-align:center;color:var(--text3);font-style:italic;padding:14px">Todas as atas foram lidas.</td></tr>';
+    document.querySelectorAll("#lic_cobertura .lic-kpi").forEach(function(el){
+      var go=function(){ st.leitura=el.dataset.leit; renderAll(); };
+      el.onclick=go;
+      el.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}};
+    });
+    document.querySelectorAll("#lic_leitura_bar .chip-btn[data-leit]").forEach(function(x){
+      x.classList.toggle("active",x.dataset.leit===st.leitura);
+    });
   }
 
   function fillSelects(){
@@ -12923,6 +12947,9 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     document.querySelectorAll("#lic_filtros .chip-btn[data-vig]").forEach(function(b){
       b.onclick=function(){st.vig=b.dataset.vig;renderAll();};
     });
+    document.querySelectorAll("#lic_leitura_bar .chip-btn[data-leit]").forEach(function(b){
+      b.onclick=function(){st.leitura=b.dataset.leit;renderAll();};
+    });
     document.querySelectorAll("#lic_itens_table thead th[data-s]").forEach(function(th){
       th.onclick=function(){
         var k=th.dataset.s;
@@ -12935,10 +12962,10 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
   window.licInit=function(){
     wire();
     document.getElementById("lic_gerado").textContent=DATA.g||"—";
-    fillSelects(); renderPend(); renderAll();
+    fillSelects(); renderAll();
     return Promise.resolve();
   };
-  window.renderLic=function(){ renderPend(); renderAll(); };
+  window.renderLic=function(){ renderAll(); };
 })();
 </script>
 </body></html>
