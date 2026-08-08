@@ -2660,20 +2660,13 @@ button,.tab,.nav-item,.menu-item{touch-action:manipulation}
 <div class="stats-grid" id="lic_kpis"></div>
 
 <div class="dt-section-head" id="lic_atas_head"><div class="dt-title-wrap"><h3 class="dt-table-title">Atas de Registro de Preços</h3><span class="lic-count" id="lic_atas_count"></span></div></div>
-<div class="dt-note">Uma linha por Ata em que o navio consta como órgão participante com itens, mais as atas cujo PDF não pôde ser lido — a lacuna fica na mesma lista, não escondida noutra tabela. <b>Clique numa linha</b> para restringir a consulta de itens, abaixo, só àquela ata.</div>
+<div class="dt-note">Uma linha por Ata da planilha do CeIMBe para o meio. Por padrão só as atas em que o navio consta como órgão participante com item aparecem; os cartões abaixo trocam para as sem item ou a lista inteira. <b>Clique numa linha com item</b> para restringir a consulta de itens, abaixo, só àquela ata.</div>
 <div class="stats-grid" id="lic_cobertura"></div>
-<div class="flt-bar" id="lic_leitura_bar">
-  <span style="display:flex;gap:6px">
-    <button class="chip-btn active" data-leit="dem">Com demanda do navio</button>
-    <button class="chip-btn" data-leit="pend">Não lidas (digitalizadas)</button>
-    <button class="chip-btn" data-leit="all">Todas</button>
-  </span>
-</div>
 <div class="dt-table-wrap" style="max-height:440px;overflow-y:auto">
   <table class="dt-table" id="lic_atas_table">
     <thead><tr>
       <th>Objeto</th><th>PE</th><th>Ata</th><th>Fornecedor</th><th>CNPJ</th><th>Vigência</th>
-      <th>Dias</th><th>OMs</th><th>Leitura</th><th>Itens</th><th>Valor</th><th>PNCP</th>
+      <th>Dias</th><th>OMs</th><th>Itens</th><th>Valor</th><th>PNCP</th>
     </tr></thead>
     <tbody id="lic_atas_tbody"></tbody>
   </table>
@@ -12678,7 +12671,18 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     r.hay=(r.desc+" "+r.catmat+" "+r.obj+" "+r.emp+" "+r.cnpj+" "+r.pe+" "+r.ata+" "+r.item+" "+r.un).toLowerCase();
     return r;
   });
-  var PEND_N = DATA.a.filter(function(a){return a[6]!==0;}).length;
+
+  /* partição fixa das 276 atas — tem item do navio no dataset × não tem
+     nenhum — calculada sobre ROWS inteiro, nunca sobre um resultado
+     filtrado. renderCobertura() (o cartão) e renderAtas() (a tabela, no
+     modo "sem") leem daqui, e só daqui: se "sem item" fosse recalculado a
+     partir da busca/filtro ativo, uma ata que tem item mas nenhum casando
+     o termo buscado cairia aqui e o cartão passaria a afirmar algo falso
+     sobre ela (ela tem item — só não um que bateu com a busca). */
+  var ATA_COM_ITEM = {};
+  ROWS.forEach(function(r){ ATA_COM_ITEM[r.ai]=1; });
+  var ATAS_SEM_ITEM = [];
+  DATA.a.forEach(function(a,i){ if(!ATA_COM_ITEM[i]) ATAS_SEM_ITEM.push(i); });
 
   function filtered(ignoreAta){
     var terms=st.busca.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -12728,16 +12732,18 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
   function renderKpis(){
     var cards=[
       ["all","Demanda registrada",fmtBRL(KPI.valor),"var(--c-teal)",
-        KPI.itens+" itens · "+KPI.atas+" atas · "+KPI.pes+" pregões","mostrar tudo",false],
+        KPI.itens+" itens · "+KPI.atas+" atas · "+KPI.pes+" pregões","mostrar tudo",false,true],
       ["venc90","Atas a vencer ≤ 90 d",KPI.a90,"var(--c-amber)",
-        KPI.n90+(KPI.n90===1?" item · ":" itens · ")+fmtBRL(KPI.v90),"filtrar",st.vig==="90"],
+        KPI.n90+(KPI.n90===1?" item · ":" itens · ")+fmtBRL(KPI.v90),"filtrar",st.vig==="90",KPI.a90>0],
       ["vencida","Atas vencidas",KPI.avc,"var(--c-red)",
-        KPI.nvc+(KPI.nvc===1?" item · ":" itens · ")+fmtBRL(KPI.vvc),"filtrar",st.vig==="venc"],
+        KPI.nvc+(KPI.nvc===1?" item · ":" itens · ")+fmtBRL(KPI.vvc),"filtrar",st.vig==="venc",KPI.avc>0],
       ["gap","Itens com lacuna",KPI.gapN,"var(--c-amber)",
-        "sem qtd, preço ou CATMAT legível no PDF","filtrar",st.gap],
-      ["ocr","Atas não pesquisáveis",PEND_N,"var(--c-red)",
-        "PDF digitalizado — fora desta consulta","ver lista",false]
+        "sem qtd, preço ou CATMAT legível no PDF","filtrar",st.gap,KPI.gapN>0]
     ];
+    /* cartão sem ocorrência não aparece: o clique só levaria a um filtro vazio.
+       Assim, quando uma carga futura zerar (ou repovoar) uma dessas contagens,
+       a faixa se ajusta sozinha — sem cartão morto e sem editar este código de novo. */
+    cards = cards.filter(function(c){return c[7];});
     document.getElementById("lic_kpis").innerHTML=cards.map(function(c){
       return '<div class="stats-card lic-kpi'+(c[6]?" active":"")+'" data-k="'+c[0]+'" role="button" tabindex="0">'+
         '<h4>'+esc(c[1])+'</h4>'+
@@ -12755,8 +12761,6 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     else if(k==="venc90")st.vig=(st.vig==="90")?"all":"90";
     else if(k==="vencida")st.vig=(st.vig==="venc")?"all":"venc";
     else if(k==="gap")st.gap=!st.gap;
-    else if(k==="ocr"){st.leitura=(st.leitura==="pend")?"dem":"pend";
-      document.getElementById("lic_atas_head").scrollIntoView({behavior:"smooth",block:"start"});}
     renderAll();
   }
 
@@ -12796,21 +12800,32 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
       '<td colspan="2"></td><td><b>'+fmtBRL(soma)+'</b></td><td colspan="2"></td></tr>';
   }
 
-  /* Uma tabela só de atas. As duas anteriores mostravam conjuntos DISJUNTOS
-     (lidas com demanda × não lidas) com 8 de 11 colunas iguais, o que lia como
-     repetição. Fundidas, a lacuna de leitura fica na mesma lista — visível, que
-     era o ponto de tê-la — e a coluna Leitura diz de qual conjunto é a linha. */
-  var LEIT={0:["✓ lida","var(--c-teal)"],1:["⚠ digitalizada","var(--c-amber)"],2:["✕ falha","var(--c-red)"]};
+  /* Uma tabela só de atas, por padrão restrita às que têm item do navio; os
+     cartões de cobertura (renderCobertura, logo abaixo) trocam pra ver as sem
+     item ou o total. A antiga coluna Leitura media um estado do pipeline de
+     OCR anterior à publicação (PDF digitalizado × com camada de texto); hoje
+     toda ata chega já lida, então ela virou ruído fixo e foi removida — o
+     dado que importa agora é ter ou não item do navio, e isso já aparece na
+     coluna Itens (conta ou "—").
 
-  function renderAtas(ra){
-    var agg={};
-    ra.forEach(function(r){var g=agg[r.ai]||(agg[r.ai]={n:0,v:0});g.n++;g.v+=r.tot||0;});
+     Recebe `agg` já pronto (montado uma vez em renderAll, junto com
+     renderCobertura) em vez de recalcular a partir de `ra` aqui dentro —
+     assim as duas telas leem exatamente o mesmo objeto e não têm como
+     divergir entre si. "sem" usa ATAS_SEM_ITEM (fixo, ver acima) — nunca o
+     "não apareceu no filtro atual", que é outra coisa. Por isso "all"
+     (comDem+ATAS_SEM_ITEM) não soma 276 quando há busca/obj/pe/vig/gap
+     ativos: uma ata que tem item mas nenhum casando o filtro não é "sem
+     item" (ATAS_SEM_ITEM não a inclui) nem "com demanda" (comDem, filtrado,
+     também não) — ela some da lista, igual sumiria do modo "dem" sozinho.
+     O cabeçalho acima da tabela já diz quantas atas restaram; não é mentira,
+     é o filtro fazendo o que se espera dele. Preferível a "all" ignorar o
+     filtro: aí a ata apareceria com "—" em Itens, voltando a afirmar (falso)
+     que ela não tem item do navio. */
+  function renderAtas(agg){
     var comDem=Object.keys(agg).map(Number);
-    var pend=[];
-    DATA.a.forEach(function(a,i){ if(a[6]!==0) pend.push(i); });
 
-    var keys = st.leitura==="pend" ? pend
-             : st.leitura==="all"  ? comDem.concat(pend)
+    var keys = st.leitura==="sem" ? ATAS_SEM_ITEM
+             : st.leitura==="all" ? comDem.concat(ATAS_SEM_ITEM)
              : comDem;
     keys.sort(function(x,y){
       return (objOf(x)+DATA.a[x][1]).localeCompare(objOf(y)+DATA.a[y][1],"pt-BR");
@@ -12822,12 +12837,12 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
 
     var tb=document.getElementById("lic_atas_tbody");
     if(!keys.length){
-      tb.innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhuma ata para os filtros aplicados.</td></tr>';
+      tb.innerHTML='<tr><td colspan="11" style="text-align:center;color:var(--text3);font-style:italic;padding:18px">Nenhuma ata para os filtros aplicados.</td></tr>';
       return;
     }
     tb.innerHTML=keys.map(function(i){
-      var a=DATA.a[i], g=agg[i], dias=diasOf(i), L=LEIT[a[6]]||LEIT[0];
-      /* só a ata lida filtra a consulta de itens — a não lida não tem item para mostrar */
+      var a=DATA.a[i], g=agg[i], dias=diasOf(i);
+      /* só a ata com item clica pra filtrar — a sem item não tem o que mostrar */
       var cli=g?"clickable-row ":"";
       return '<tr class="'+cli+rowCls(dias)+(st.ataSel===i?" lic-sel":"")+'"'+(g?' data-ata="'+i+'"':'')+'>'+
         '<td title="'+esc(objOf(i))+'">'+esc(objOf(i))+'</td>'+
@@ -12837,7 +12852,6 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
         '<td>'+fmtData(a[4])+'</td>'+
         '<td>'+(dias===null?"—":(dias<0?"vencida":dias+"d"))+'</td>'+
         '<td>'+(a[7]||"—")+'</td>'+
-        '<td style="color:'+L[1]+';white-space:nowrap">'+esc(L[0])+'</td>'+
         '<td><b>'+(g?g.n:"—")+'</b></td><td><b>'+(g?fmtBRL(g.v):"—")+'</b></td>'+
         '<td>'+pncpLink(a[8])+'</td></tr>';
     }).join("");
@@ -12855,7 +12869,6 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
   function renderCount(rs){
     var v=rs.reduce(function(s,r){return s+(r.tot||0);},0);
     var t=(temFiltro()? rs.length+" de "+ROWS.length : String(ROWS.length))+" itens · "+fmtBRL(v);
-    if(st.busca.trim()) t+=" · a busca não alcança as "+PEND_N+" atas digitalizadas";
     document.getElementById("lic_count").textContent=t;
   }
 
@@ -12876,20 +12889,43 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     } else chip.style.display="none";
   }
 
-  function renderAll(){
-    var rs=filtered(false);
-    renderKpis(); renderCobertura(); renderAtas(filtered(true)); renderItens(rs); renderCount(rs); syncControls();
+  /* ata → {n: nº de itens, v: valor} dentro do resultado filtrado (ra). Só
+     tem chave pras atas com ao menos 1 item batendo o filtro atual. */
+  function aggAtas(ra){
+    var agg={};
+    ra.forEach(function(r){var g=agg[r.ai]||(agg[r.ai]={n:0,v:0});g.n++;g.v+=r.tot||0;});
+    return agg;
   }
 
-  /* cobertura da leitura: fica junto da tabela de atas, que é o que ela mede.
-     Os cartões são atalhos para o filtro de leitura da própria tabela. */
-  function renderCobertura(){
-    var ok=0, dig=0, erro=0;
-    DATA.a.forEach(function(a){ if(a[6]===1)dig++; else if(a[6]===2)erro++; else ok++; });
+  function renderAll(){
+    var rs=filtered(false);
+    var agg=aggAtas(filtered(true));
+    renderKpis(); renderCobertura(agg); renderAtas(agg); renderItens(rs); renderCount(rs); syncControls();
+  }
+
+  /* cobertura das atas: quantas têm ao menos 1 item do navio × quantas não
+     têm nenhum. Fica junto da tabela de atas, que é o que ela mede — e os
+     cartões são o único controle do filtro de triagem da própria tabela
+     (o antigo flt-bar de chips ao lado foi removido por duplicar isto).
+     Substituiu a distinção anterior (digitalizada/falha de leitura), que
+     media um estado do pipeline de OCR anterior à publicação e hoje é
+     sempre zero — toda ata chega já lida ao app.
+
+     "dem" e "all" contam a partir do MESMO `agg` que renderAtas recebe (os
+     dois são montados uma vez em renderAll, a partir do mesmo resultado
+     filtrado) — por construção, o cartão nunca pode divergir do que a
+     tabela mostra ao clicar nele, com busca/obj/pe/vig/gap ativos ou não.
+     "sem" é a única exceção deliberada: usa ATAS_SEM_ITEM (fixo, calculado
+     uma vez lá em cima sobre DATA.d inteiro), porque uma ata sem nenhum
+     item não tem como ser afetada por um filtro que opera sobre itens —
+     não há o que filtrar nela, e por isso a contagem não some nem inflaciona
+     com busca ativa. */
+  function renderCobertura(agg){
+    var nComItem=Object.keys(agg).length, nSemItem=ATAS_SEM_ITEM.length;
     document.getElementById("lic_cobertura").innerHTML =
-      [["dem","Atas lidas",ok,"PDF com camada de texto","var(--c-teal)"],
-       ["pend","Digitalizadas",dig,"imagem — exigem OCR","var(--c-amber)"],
-       ["pend","Falha de leitura",erro,"PDF inválido no PNCP","var(--c-red)"]].map(function(c){
+      [["dem","Atas com demanda do navio",nComItem,"com item do meio, dentro do filtro em uso","var(--c-teal)"],
+       ["sem","Atas sem item do navio",nSemItem,"constam da planilha, mas sem item do meio — não muda com busca/filtro","var(--text3)"],
+       ["all","Todas as atas",nComItem+nSemItem,"com e sem item, dentro do filtro em uso","var(--c-blue)"]].map(function(c){
         var on=(st.leitura===c[0]);
         return '<div class="stats-card lic-kpi'+(on?" active":"")+'" data-leit="'+c[0]+'" role="button" tabindex="0">'+
           '<h4>'+esc(c[1])+'</h4>'+
@@ -12900,9 +12936,6 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
       var go=function(){ st.leitura=el.dataset.leit; renderAll(); };
       el.onclick=go;
       el.onkeydown=function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}};
-    });
-    document.querySelectorAll("#lic_leitura_bar .chip-btn[data-leit]").forEach(function(x){
-      x.classList.toggle("active",x.dataset.leit===st.leitura);
     });
   }
 
@@ -12946,9 +12979,6 @@ try{window.LIC_DATA=JSON.parse(document.getElementById("lic_data").textContent);
     document.getElementById("lic_export_csv").onclick=exportCsv;
     document.querySelectorAll("#lic_filtros .chip-btn[data-vig]").forEach(function(b){
       b.onclick=function(){st.vig=b.dataset.vig;renderAll();};
-    });
-    document.querySelectorAll("#lic_leitura_bar .chip-btn[data-leit]").forEach(function(b){
-      b.onclick=function(){st.leitura=b.dataset.leit;renderAll();};
     });
     document.querySelectorAll("#lic_itens_table thead th[data-s]").forEach(function(th){
       th.onclick=function(){
